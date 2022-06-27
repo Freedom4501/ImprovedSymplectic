@@ -1,3 +1,4 @@
+"New Symplectic implementation"
 const all_single_qubit_patterns = (
     (true, false, false, true), # X, Z ↦ X, Z
     (false, true, true, true),  # X, Z ↦ Z, Y
