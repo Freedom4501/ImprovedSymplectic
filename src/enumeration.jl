@@ -155,6 +155,167 @@ function enumerate_cliffords_slow(n,i;padded_n=n,onlycoset=false) # TODO impleme
     end
 end
 
+
+"""
+Calculates the symplectic inner product
+"""
+function inner(v, w)
+    t = 0
+    for i in 0:(sizeof(v) >> 1)
+        t = t + v[2i + 1] * w[2i + 2]
+        t = t + w[2i + 1] * v[2i + 2]
+    end
+    return t % 2
+end
+
+"""
+Applies transvection Z_k to v
+"""
+function transvection(k, v)
+    return (v + inner(k, v) * k) % 2
+end
+
+"""
+finds h1, h2 such that y = Z_h1 Z_h2 x
+Transvection as described in Lemma 2
+Followed the procedure mentioned in the proof of lemma 2
+"""
+function findTransvection(x, y)
+    otp = zeros(Int8, 2, sizeof(x))
+    if x == y
+        return otp
+    end
+    if inner(x, y) == 1
+        otp[1] = (x + y) % 2
+        return otp
+    end
+
+    # find a pair both not 00
+    z = zeros(sizeof(x))
+    for i in 0:(sizeof(x) >> 1)
+        if ((x[2i + 1] + x[2i + 2]) != 0) & ((y[2i + 1] + y[2i + 2]) != 0)
+            z[2i + 1] = (x[2i + 1] + y[2i + 1]) % 2
+            z[2i + 2] = (x[2i + 2] + y[2i + 2]) % 2
+            if x[2i + 1] != x[2i + 2]
+                z[2i + 1] = 1
+            end
+        end
+        otp[1] = (x + z) % 2
+        otp[2] = (y + z) % 2
+        return otp
+    end
+
+    # didn't find a pair, look for x has 00 and y doesn't, and vice versa
+
+    # first y == 00 and x doesn't
+    for i in 1:(sizeof(x) >> 1)
+        if ((x[2i + 1] + x[2i + 2]) == 0) & ((y[2i + 1] + y[2i + 2]) != 0)
+            if y[2i + 1] == y[2i + 2]
+                z[2i + 2] = 1
+            else
+                z[2i + 2] = y[2i + 1]
+                z[2i + 1] = y[2i + 2]
+            break
+            end 
+        end
+    end
+    otp[1] = (x + z) % 2
+    otp[2] = (y + z) % 2
+    return otp
+end
+
+"""
+Returns the number of symplectic group elements
+"""
+function numOfSymplectic(n)
+    x = 1
+    for j in 1:n+1
+        x = x * numOfCosets(j)
+    end
+    return x
+end
+
+"""
+Returns the number of different cosets
+"""
+function numOfCosets(n) 
+    return (2^(2n - 1))*((2^2n)-1)
+end
+
+function directSum(m1, m2)
+    n1 = length(m1[1])
+    n2 = length(m2[1])
+    otp = zeros(Int8, n1 + n2, n1 + n2)
+    for i in 1:(n1 + 1)
+        for j in 1:(n1 + 1)
+            otp[i, j] = m1[i, j]
+        end
+    end
+
+    for i in 1:(n2 + 1)
+        for j in 1:(n2 + 1)
+            otp[i + n1, j + n1] = m2[i, j]
+        end
+    end
+
+    return otp
+end
+
+function symplectic(i, n)
+    # step 1
+    s = (1<<2n) - 1
+    k = (i % s) + 1
+    i = floor(i / s)
+    # step 2
+    f1 = int_to_bits(2n, k)
+    # step 3
+    e1 = zeros(Int8, 2n) # define first basis vectors
+    e1[0] = 1
+    T = findTransvection(e1, f1) # Lemma 2
+    # step 4
+    # b[0] = b in the text, b[1] ... b[2n−2] are b_3 ... b_2n in the text
+    bits = int_to_bits(2n - 1, i % (1<<(2n - 1)))
+    # step 5
+    eprime = copy(e1) # constructing vector
+    for j in 3:(2n + 1)
+        eprime[j] = bits[j - 1]
+    end
+    h0 = transvection(T[1], eprime) # computes h0 using (h1. h2) specifying T
+    h0 = transvection(T[1], h0)
+    
+    # step 6
+    if bits[1] == 1
+        f1 = f1 * 0
+    end
+    # f2 is not computed here because step 7 recomputes f2 for us
+
+    # step 7 
+    # identity matrix
+    id2 = zeros(Int8, 2, 2)
+    id2[1, 1] = 1
+    id2[2, 2] = 1
+
+    if n != 1
+        g = directSum(id2, symplectic(i >> (2n - 1), n - 1))
+    else
+        # columns f1, f2 as gj
+        g = id2
+    end
+
+    for j in 1:(2n + 1)
+        g[j] = transvection(T[1], g[j])
+        g[j] = transvection(T[2], g[j])
+        g[j] = transvection(h0, g[j])
+        g[j] = transvection(f1, g[j])
+    end
+
+    return g
+end
+
+function enumerate_cliffords_fast(n, i; padded_n = n, onlycoset = false)
+    return symplectic(i, n)
+end
+
 """Give all n-qubit Clifford operations.
 
 The algorithm is detailed in [koenig2014efficiently](@cite).
